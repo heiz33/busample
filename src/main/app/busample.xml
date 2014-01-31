@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:json="http://www.mulesoft.org/schema/mule/json" xmlns:file="http://www.mulesoft.org/schema/mule/file" xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+	xmlns:spring="http://www.springframework.org/schema/beans" version="CE-3.4.0"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans-current.xsd
+http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/file http://www.mulesoft.org/schema/mule/file/current/mule-file.xsd
+http://www.mulesoft.org/schema/mule/json http://www.mulesoft.org/schema/mule/json/current/mule-json.xsd">
+    <file:connector name="File" autoDelete="true" streaming="true" validateConnections="true" doc:name="File"/>
+    
+    <spring:beans>
+        <spring:bean id="mongoDb" class="com.mongodb.MongoClient" scope="singleton">
+            <spring:constructor-arg index="0" type="java.lang.String" value="localhost"/>
+            <spring:constructor-arg index="1" type="int" value="27017"/>
+        </spring:bean>
+       
+       <spring:bean id="mongoInsert" class="com.dgzgroup.bulkupload.InsertMongoComponent" scope="singleton">
+       		<spring:property name="db" ref="mongoDb"></spring:property>
+       		<spring:property name="dbName" value="mydb"></spring:property>
+       </spring:bean>
+        <spring:import resource="classpath:spring-beans.xml"/>
+       
+    </spring:beans>
+<!--     <mongo:config name="Mongo_DB" database="mydb" doc:name="Mongo DB"> -->
+<!--         <mongo:connection-pooling-profile initialisationPolicy="INITIALISE_ONE" exhaustedAction="WHEN_EXHAUSTED_GROW"/> -->
+<!--     </mongo:config> -->
+  
+        
+    <flow name="busampleFlow1" doc:name="busampleFlow1">
+        <file:inbound-endpoint path="/Users/zimmerd/Development/mule/mule_workspace/bulk-listener" moveToDirectory="/Users/zimmerd/Development/mule/mule_workspace/bulk-listener/archive" responseTimeout="10000" connector-ref="File" doc:name="File">
+            <file:filename-regex-filter pattern="^.*.csv$" caseSensitive="true"/>
+        </file:inbound-endpoint>
+        <file:file-to-string-transformer doc:name="File to String"/>
+        <logger message="#[message.payload]" level="INFO" doc:name="Logger"/>
+        <custom-transformer class="com.dgzgroup.bulkupload.CsvToJSONTransformer" doc:name="Java"/>
+        <foreach collection="#[message.payload]" doc:name="For Each">
+            <json:object-to-json-transformer sourceClass="com.dgzgroup.bulkupload.BulkItem" doc:name="Object to JSON"/>
+            
+            <component doc:name="Mongo Insert">
+            	<spring-object bean="mongoInsert"/>
+            </component>
+            
+            
+<!--             <mongo:insert-object-from-map config-ref="Mongo_DB"   doc:name="Mongo DB" collection="mybulkitems"> -->
+<!--                 <mongo:element-attributes ref="#[payload]"/> -->
+<!--             </mongo:insert-object-from-map> -->
+            <logger message="#[message.payload] after object to json" level="INFO" doc:name="Logger"/>
+        </foreach>
+        <logger message="#[message.payload] after MessageTransformer" level="INFO" doc:name="Logger"/>
+    </flow>
+</mule>
